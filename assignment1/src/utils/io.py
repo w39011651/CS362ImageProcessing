@@ -1,5 +1,6 @@
 import cv2
 import logging
+import numpy as np
 
 from pathlib import Path
 from os import PathLike
@@ -9,26 +10,26 @@ logger = logging.getLogger(__name__)
 class photoRW:
         path: Path | None
         def __init__(self, path: str | PathLike[str]):
-                self.path = Path(path)
-
-        def read(self, path: str | PathLike[str] | None)->cv2.typing.MatLike | None:
                 if path is not None:
                         self.path = Path(path)
+        @classmethod
+        def read(cls, path: str | PathLike[str] | None)->cv2.typing.MatLike | None:
                 try:
-                        assert self.path is not None
+                        assert path is not None
                 except AssertionError as e:
                         logger.error("The path of image is None, please retry.")
                         return None
                 
-                img = cv2.imread(self.path)
+                img_data = np.fromfile(path, dtype=np.uint8)
+                img = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
                 
                 if img is None:
                         logger.error("The image is None, please retry.")
                         return None
                 
                 return img
-
-        def write(self, image: cv2.typing.MatLike, filename: PathLike[str] | str = "newPicture.jpg")->None:
+        @classmethod
+        def write(cls, image: cv2.typing.MatLike, filename: PathLike[str] | str = "newPicture.jpg")->None:
                 try:
                         cv2.imwrite(filename, image)
                 except Exception as e:

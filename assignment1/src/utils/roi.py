@@ -54,7 +54,8 @@ class RoiEllipseSelector(RoiSelector):
                 
 
 if __name__ == '__main__':
-        img = cv2.imread(Path("./assignment1/assignment1/test.jpg"))
+        img_data = np.fromfile(Path("C:/Users/lovem/Desktop/repository/影像處理概論/assignment1/assignment1/assignment1/test.jpg"), dtype=np.uint8)
+        img = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
         r = RoiEllipseSelector()
         assert img is not None
 
