@@ -5,19 +5,22 @@ import numpy as np
 from PIL import Image, ImageTk
 from pathlib import Path
 from tkinter import filedialog
-from typing import Protocol
+from typing import Protocol, Iterable
 from os import PathLike
 from cv2.typing import MatLike
 
 from roi import RoiSelector, RoiRectSelector, RoiEllipseSelector
-from resize import ResizeStrategy
-from rotate import RotateStrategy
+from resize import ResizeStrategy, ResizeNearest, ResizeBilinear, ResizeBicubic
+from rotate import RotateStrategy, RotateAngle
 
 class ActionsProvider(Protocol):
         def open_file(self)-> str:...
         def apply_roi(self, img: MatLike, ROI: RoiSelector)->MatLike:...
         def apply_rotate(self, img: MatLike, Rotate: RotateStrategy, angle:int)->MatLike:...
         def apply_resize(self, img: MatLike, Resize: ResizeStrategy, x:int, y:int)->MatLike:...
+
+class Configurable(Protocol):#for tkinter type checking and Interface Segregation Principle
+        def configure(self, cnf=None, **kw) -> None:...
 
 class EventActionProvider(ActionsProvider):
         def open_file(self)->str:
@@ -28,7 +31,6 @@ class EventActionProvider(ActionsProvider):
                 file_path.replace('\\', '/')
                 print(file_path)
                 return file_path
-
         
         def apply_roi(self, img: MatLike, ROI: RoiSelector)->MatLike:
                 #dependent on abstract
@@ -90,12 +92,8 @@ class MainWindow:
                 
                 self._show_image(Path(path))
                 self._set_roi_controls_state(enabled=True)
-
-
-        def _on_roi_click(self) -> None:
-                if self.img is None:
-                        return
-                self._set_roi_controls_state(enabled=True)
+                self._set_resize_controls_state(True)
+                self._set_rotate_controls_state(True)
 
 
         def _on_roi_start(self) -> None:
@@ -104,19 +102,69 @@ class MainWindow:
 
                 selector = self._create_roi_selector(self._roi_strategy_var.get())
                 result = self.actions.apply_roi(self.img, selector)
+
+                if result.shape == (0,0,3):
+                        print("User press C to exit ROI mod, please retry.")
+                        return
                 self._show_image_from_mat(result)
 
 
-        def _create_roi_selector(self, strategy: str) -> RoiSelector:
+        def _create_roi_selector(self, strategy: str) -> RoiSelector:# Factory Pattern
                 if strategy == "ellipse":
                         return RoiEllipseSelector()
                 return RoiRectSelector()
+        
+        def _create_resize_strategy(self, strategy: str) -> ResizeStrategy:
+                if strategy == "Nearest":
+                        return ResizeNearest()
+                elif strategy == "Bicubic":
+                        return ResizeBicubic()
+                return ResizeBilinear()#default
+        
+        def _create_rotate_strategy(self) -> RotateStrategy:
+                return RotateAngle()
 
 
         def _set_roi_controls_state(self, enabled: bool) -> None:
                 state = "normal" if enabled else "disabled"
                 self._roi_strategy_menu.config(state=state)
-                self._roi_start_button.config(state=state)
+                self.roi_button.configure(state=state)
+
+        def _set_resize_controls_state(self, enabled: bool) -> None:
+                state = "normal" if enabled else "disabled"
+                self._resize_strategy_menu.config(state=state)
+                self.resize_button.configure(state=state)
+
+        def _set_rotate_controls_state(self, enabled: bool) -> None:
+                state = "normal" if enabled else "disabled"
+                self.rotate_button.configure(state=state)
+
+
+        def _set_controls_state(self, Widgets: Iterable[Configurable], enabled: bool) -> None:
+                state = "normal" if enabled else "disabled"
+                for widget in Widgets:
+                        widget.configure(state=state)
+
+        def _on_resize_start(self) -> None:
+                if self.img is None:
+                        return
+
+                strategy = self._create_resize_strategy(self._resize_strategy_var.get())
+                x,y = int(self._resize_input_x.get()), int(self._resize_input_y.get())
+
+                result = self.actions.apply_resize(self.img, strategy, x, y)
+
+                self._show_image_from_mat(result)#FIX: need to scale with equal ratio
+
+        def _on_rotate_start(self) -> None:
+                if self.img is None:
+                        return
+
+                rotater = self._create_rotate_strategy()
+                angle = int(self._rotate_input.get())
+                result = self.actions.apply_rotate(self.img, rotater, angle)
+
+                self._show_image_from_mat(result)
 
 
         def _show_image_from_mat(self, bgr: MatLike) -> None:
@@ -151,39 +199,41 @@ class MainWindow:
                 left_panel = tk.Frame(main_area, width=140)
                 left_panel.grid(row=0, column=0, sticky="ns", padx=8, pady=8)
 
-                roi_button = tk.Button(
+                self.roi_button = tk.Button(
                         left_panel,
                         text="ROI",
                         activebackground="#8F8F8F",
                         background="#C2C2C2",
                         width=12,
-                        command=self._on_roi_click,
+                        command=self._on_roi_start,
                 )
-                roi_button.pack(side="top", fill="x", pady=6)
+                self.roi_button.pack(side="top", fill="x", pady=6)
 
-                resize_button = tk.Button(
+                self.resize_button = tk.Button(
                         left_panel,
                         text="Resize",
                         activebackground="#8F8F8F",
                         background="#C2C2C2",
                         width=12,
+                        command=self._on_resize_start
                 )
-                resize_button.pack(side="top", fill="x", pady=6)
+                self.resize_button.pack(side="top", fill="x", pady=6)
 
-                rotate_button = tk.Button(
+                self.rotate_button = tk.Button(
                         left_panel,
                         text="Rotate",
                         activebackground="#8F8F8F",
                         background="#C2C2C2",
                         width=12,
+                        command=self._on_rotate_start
                 )
-                rotate_button.pack(side="top", fill="x", pady=6)
+                self.rotate_button.pack(side="top", fill="x", pady=6)
 
                 right_panel = tk.Frame(main_area)
                 right_panel.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
 
                 self._roi_controls = tk.Frame(right_panel)
-                self._roi_controls.pack(side="top", fill="x", pady=(0, 8))
+                self._roi_controls.pack(side="top", fill="x", pady=(0, 6))
 
                 self._roi_strategy_var = tk.StringVar(value="rect")
                 self._roi_strategy_menu = tk.OptionMenu(
@@ -194,14 +244,32 @@ class MainWindow:
                 )
                 self._roi_strategy_menu.pack(side="left")
 
-                self._roi_start_button = tk.Button(
-                        self._roi_controls,
-                        text="Start",
-                        command=self._on_roi_start,
-                )
-                self._roi_start_button.pack(side="left", padx=8)
-
                 self._set_roi_controls_state(enabled=False)
+
+                self._resize_control = tk.Frame(right_panel)
+                self._resize_control.pack(side="top", fill="x", pady=10)
+                self._resize_input_x = tk.Entry(self._resize_control, width=10)
+                self._resize_input_y = tk.Entry(self._resize_control, width=10)
+                self._resize_input_x.pack(side="left",padx=6)
+                self._resize_input_y.pack(side="left",padx=6)
+                self._resize_strategy_var = tk.StringVar(value="Bilinear")
+                self._resize_strategy_menu = tk.OptionMenu(
+                        self._resize_control,
+                        self._resize_strategy_var,
+                        "Bilinear",
+                        "Nearest",
+                        "Bicubic"
+                )
+                self._resize_strategy_menu.pack(side="left")
+                self._set_resize_controls_state(False)
+
+                self._rotate_control = tk.Frame(right_panel)
+                self._rotate_control.pack(side="top", fill="x", pady=10)
+                self._rotate_input = tk.Entry(self._rotate_control, width=10)
+                self._rotate_input.pack(side="left", padx=6)
+                self._set_rotate_controls_state(False)
+
+
 
                 self.preview_label = tk.Label(
                         right_panel,
