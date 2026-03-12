@@ -2,12 +2,25 @@ import cv2
 import logging
 import numpy as np
 
+from typing import Protocol
 from pathlib import Path
 from os import PathLike
 
 logger = logging.getLogger(__name__)
 
-class photoRW:
+class ReadWriteInterface(Protocol):
+        @classmethod
+        def read(cls, path: str | PathLike[str] | None)->cv2.typing.MatLike | None:...
+        @classmethod
+        def write(cls, image: cv2.typing.MatLike, filename: PathLike[str] | str = "newPicture.jpg")->None:...
+        @classmethod
+        def show(cls, image: cv2.typing.MatLike ,windowsName: str = "pic", waittime: int = 0):
+                cv2.imshow(windowsName, image)
+                cv2.waitKey(waittime)
+                cv2.destroyAllWindows()
+
+
+class photoRW(Protocol):
         path: Path | None
         def __init__(self, path: str | PathLike[str]):
                 if path is not None:
@@ -38,7 +51,8 @@ class photoRW:
 
                 logger.info("Write Success.")
 
-        def show(self, image: cv2.typing.MatLike ,windowsName: str = "pic", waittime: int = 0):
+        @classmethod
+        def show(cls, image: cv2.typing.MatLike ,windowsName: str = "pic", waittime: int = 0):
                 cv2.imshow(windowsName, image)
                 cv2.waitKey(waittime)
                 cv2.destroyAllWindows()
