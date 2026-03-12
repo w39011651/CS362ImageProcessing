@@ -15,10 +15,6 @@ class RotateAngle(RotateStrategy):
 
                 matrix = cv2.getRotationMatrix2D(center, angle, 1)
                 r_img = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
-                cv2.imshow("win", r_img)
-                if cv2.waitKey(0) & 0xFF == ord('q'):
-                        cv2.destroyAllWindows()
-                        return r_img
                 
                 return r_img
                 

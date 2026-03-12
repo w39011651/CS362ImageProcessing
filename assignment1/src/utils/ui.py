@@ -18,6 +18,7 @@ class ActionsProvider(Protocol):
         def apply_roi(self, img: MatLike, ROI: RoiSelector)->MatLike:...
         def apply_rotate(self, img: MatLike, Rotate: RotateStrategy, angle:int)->MatLike:...
         def apply_resize(self, img: MatLike, Resize: ResizeStrategy, x:int, y:int)->MatLike:...
+        def save_file(self, img: MatLike):...
 
 class Configurable(Protocol):#for tkinter type checking and Interface Segregation Principle
         def configure(self, cnf=None, **kw) -> None:...
@@ -44,11 +45,35 @@ class EventActionProvider(ActionsProvider):
         def apply_resize(self, img: MatLike, Resize: ResizeStrategy, x:int, y:int)->MatLike:
                 resize = Resize.resize(img, x, y)
                 return resize
+        
+        def save_file(self, img: MatLike):
+                path = filedialog.asksaveasfilename(
+                        title="PleaseChooseImage",
+                        filetypes=[("Image files", "*.jpg *.png *.jpeg"), ("All files", "*.*")],
+                        defaultextension=".jpg",
+                )
+                if not path:
+                        return
+
+                output_path = Path(path)
+                ext = output_path.suffix.lower()
+                if ext not in {".jpg", ".jpeg", ".png"}:
+                        output_path = output_path.with_suffix(".png")
+                        ext = ".png"
+
+                ok, buf = cv2.imencode(ext, img)
+                if not ok:
+                        return
+
+                buf.tofile(output_path)
+
+                
 
 
 class MainWindow:
         window: tk.Tk
         img: MatLike | None = None
+        original_img: MatLike | None = None
         def __init__(
                 self,
                 actions: ActionsProvider,
@@ -60,7 +85,7 @@ class MainWindow:
                 self.window = tk.Tk()
                 self.window.title(window_name)
                 self.window.geometry(f"{window_width}x{window_height}")
-                self.window.resizable(False, False)
+                self.window.resizable(True, True)
                 #self.preview_label = tk.Label(self.window, width = 400, height = 400)
 
                 ###Dependency Injection
@@ -69,20 +94,31 @@ class MainWindow:
                 ###Build other parts
                 self._build_layout()
                 self.filemenu.add_command(label="Open", command=self._on_open)
+                self.filemenu.add_command(label="Save", command=self._on_save)
+                
         
         def _show_image(self, path:PathLike[str] | str):
                 img_data = np.fromfile(path, dtype=np.uint8)
                 bgr = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
                 assert bgr is not None
-
+                self.original_img = bgr.copy()
                 self.img = bgr
 
                 rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(rgb)
-                img = img.resize((400, 400))
+                #img = img.resize((400, 400))
 
                 self._photo = ImageTk.PhotoImage(img)
                 self.preview_label.config(image = self._photo, text="")
+
+        def __compare(self):
+                if self.img is None or self.original_img is None:
+                        return
+                
+                diff = cv2.absdiff(self.original_img, self.img)
+                gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+                _, mask = cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
+                
 
 
         def _on_open(self)->None:
@@ -95,6 +131,9 @@ class MainWindow:
                 self._set_resize_controls_state(True)
                 self._set_rotate_controls_state(True)
 
+        def _on_save(self)->None:
+                assert self.img is not None
+                self.actions.save_file(self.img)
 
         def _on_roi_start(self) -> None:
                 if self.img is None:
@@ -139,12 +178,6 @@ class MainWindow:
                 state = "normal" if enabled else "disabled"
                 self.rotate_button.configure(state=state)
 
-
-        def _set_controls_state(self, Widgets: Iterable[Configurable], enabled: bool) -> None:
-                state = "normal" if enabled else "disabled"
-                for widget in Widgets:
-                        widget.configure(state=state)
-
         def _on_resize_start(self) -> None:
                 if self.img is None:
                         return
@@ -153,6 +186,9 @@ class MainWindow:
                 x,y = int(self._resize_input_x.get()), int(self._resize_input_y.get())
 
                 result = self.actions.apply_resize(self.img, strategy, x, y)
+                cv2.imshow("Resize", result)
+                if cv2.waitKey(0) & 0xFF == ord('q'):
+                        cv2.destroyAllWindows()
 
                 self._show_image_from_mat(result)#FIX: need to scale with equal ratio
 
@@ -163,6 +199,9 @@ class MainWindow:
                 rotater = self._create_rotate_strategy()
                 angle = int(self._rotate_input.get())
                 result = self.actions.apply_rotate(self.img, rotater, angle)
+                # cv2.imshow("Rotate", result)
+                # if cv2.waitKey(0) & 0xFF == ord('q'):
+                #         cv2.destroyAllWindows()                
 
                 self._show_image_from_mat(result)
 
@@ -172,7 +211,7 @@ class MainWindow:
 
                 rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(rgb)
-                img = img.resize((400, 400))
+                #img = img.resize((400, 400))
 
                 self._photo = ImageTk.PhotoImage(img)
                 self.preview_label.config(image=self._photo, text="")
@@ -187,7 +226,6 @@ class MainWindow:
                 self.filemenu = tk.Menu(self.menubar, tearoff=0)
                 self.savemenu = tk.Menu(self.menubar, tearoff=0)
                 self.menubar.add_cascade(label='File', menu=self.filemenu)
-                self.menubar.add_cascade(label="Save", menu=self.savemenu)
                 self.window.config(menu=self.menubar)
 
                 main_area = tk.Frame(self.window)
@@ -268,6 +306,16 @@ class MainWindow:
                 self._rotate_input = tk.Entry(self._rotate_control, width=10)
                 self._rotate_input.pack(side="left", padx=6)
                 self._set_rotate_controls_state(False)
+
+                self.comapre_button = tk.Button(
+                        left_panel,
+                        text="Compare",
+                        activebackground="#8F8F8F",
+                        background="#C2C2C2",
+                        width=12,
+                        command=self.__compare
+                )
+                self.comapre_button.pack(side="left", padx=6)
 
 
 
