@@ -69,7 +69,7 @@ class MainWindow:
 
         def _set_compare_control(self, enabled: bool) -> None:
                 state = "normal" if enabled else "disabled"
-                self.comapre_button.configure(state=state)
+                self.compare_button.configure(state=state)
         ###SET WIDGET STATE
 
         ###WIDGET EVENT###
@@ -103,7 +103,7 @@ class MainWindow:
                 if self.img is None or self.original_img is None:
                         return None
                 
-                return self.actions.compare(self.img, self.original_img)
+                return self.actions.compare(self.original_img, self.img)
         ###WIDGET EVENT###
 
         ###RENDER
@@ -112,6 +112,7 @@ class MainWindow:
                 Args:
                         rgb: the color of each pixel is formated as r,g,b
                 """
+                self.img = bgr
                 rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(rgb)
                 self._photo = ImageTk.PhotoImage(img)
@@ -205,7 +206,7 @@ class MainWindow:
                 self._rotate_input.pack(side="left", padx=6)
                 self._set_rotate_controls_state(False)
 
-                self.comapre_button = tk.Button(
+                self.compare_button = tk.Button(
                         left_panel,
                         text="Compare",
                         activebackground="#8F8F8F",
@@ -213,7 +214,7 @@ class MainWindow:
                         width=12,
                         command=self._on_compare
                 )
-                self.comapre_button.pack(side="left", padx=6)
+                self.compare_button.pack(side="left", padx=6)
                 self._set_compare_control(False)
 
 

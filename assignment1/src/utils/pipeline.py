@@ -1,11 +1,14 @@
 import cv2
 import ui
 
+import matplotlib.pyplot as plt
+
 from tkinter import filedialog
 from cv2.typing import MatLike
 from pathlib import Path
 from abc import ABC
 from typing import Any, Protocol, Iterable
+
 
 from imageIO import photoRW
 from roi import RoiSelector, RoiEllipseSelector, RoiRectSelector
@@ -18,7 +21,7 @@ class ActionsProvider(Protocol):
         def apply_rotate(self, img: MatLike, pattern: str, angle:int)->MatLike:...
         def apply_resize(self, img: MatLike, pattern: str, x:int, y:int)->MatLike:...
         def save_file(self, img: MatLike):...
-        def compare(self, img1: MatLike, img2: MatLike)->MatLike:...
+        def compare(self, img1: MatLike, img2: MatLike)->None:...
 
 class ImagePipeline(ActionsProvider):
         def __init__(self):
@@ -73,14 +76,30 @@ class ImagePipeline(ActionsProvider):
 
                 buf.tofile(output_path)
 
-        def compare(self, img1: MatLike, img2: MatLike)->MatLike:
+        def compare(self, img1: MatLike, img2: MatLike)->None:
+                """
+                Compare two images in the same window (with matplotlib)
+                Args:
+                        img1: images (before modify),
+                        img2: images (after  modify)
+                """
                 if img1 is None or img2 is None:
                         return
-                
-                diff = cv2.absdiff(img1, img2)
-                gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-                _, mask = cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
-                return mask
+                img1_rgb = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+                img2_rgb = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+                plt.figure()
+                plt.subplot(1, 2, 1)
+                plt.imshow(img1_rgb)
+                plt.title("before modify")
+                plt.axis("off")
+                plt.subplot(1,2,2)
+                plt.imshow(img2_rgb)
+                plt.title("after modify")
+                plt.axis("off")
+
+                plt.tight_layout()
+                plt.show()
+
 
 class Factory(ABC):
         options: Iterable[str]
